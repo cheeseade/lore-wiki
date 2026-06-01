@@ -346,5 +346,48 @@ class TestCursorRoundTrip(unittest.TestCase):
             self.assertEqual(m2["skipped"], 1)
 
 
+class TestHumanSummary(unittest.TestCase):
+    def test_fmt_bytes(self):
+        self.assertEqual(sel._fmt_bytes(512), "512 B")
+        self.assertEqual(sel._fmt_bytes(2048), "2.0 KB")
+        self.assertEqual(sel._fmt_bytes(3 * 1024 * 1024), "3.0 MB")
+
+    def test_summary_totals_and_top_projects(self):
+        manifest = {
+            "scanned": 5, "skipped": 2,
+            "units": [
+                {"unit_id": 1, "extracted_bytes": 100, "sessions": [
+                    {"sessionId": "s1", "cwd": "/work/a"},
+                    {"sessionId": "s2", "cwd": "/work/a"}]},
+                {"unit_id": 2, "extracted_bytes": 50, "sessions": [
+                    {"sessionId": "s3", "cwd": "/work/b"}]},
+            ],
+        }
+        out = sel.human_summary(manifest, "/tmp/run")
+        self.assertIn("스캔 5", out)
+        self.assertIn("skip 2", out)
+        self.assertIn("신규 3 세션", out)
+        self.assertIn("2 유닛", out)
+        self.assertIn("150 B", out)            # 100 + 50 추출
+        self.assertIn("2  /work/a", out)       # a 가 세션 2개로 상위
+        self.assertIn("1  /work/b", out)
+        self.assertIn("run_dir: /tmp/run", out)
+
+    def test_summary_truncates_with_rest_line(self):
+        units = [{"unit_id": i, "extracted_bytes": 10,
+                  "sessions": [{"sessionId": "s%d" % i, "cwd": "/p%02d" % i}]}
+                 for i in range(20)]
+        out = sel.human_summary({"scanned": 20, "skipped": 0, "units": units},
+                                "/tmp/run", top=15)
+        self.assertIn("그 외 5개 프로젝트, 5 세션", out)
+
+    def test_summary_missing_cwd_labeled_unknown(self):
+        manifest = {"scanned": 1, "skipped": 0, "units": [
+            {"unit_id": 1, "extracted_bytes": 10,
+             "sessions": [{"sessionId": "s1", "cwd": None}]}]}
+        out = sel.human_summary(manifest, "/tmp/run")
+        self.assertIn("(unknown)", out)
+
+
 if __name__ == "__main__":
     unittest.main()

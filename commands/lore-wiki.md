@@ -1,6 +1,7 @@
 ---
 name: lore-wiki
 description: Claude Code 세션을 증류해 마크다운 지식 위키로 ingest 한다 (기본 서브커맨드 ingest)
+disable-model-invocation: true
 ---
 
 Claude Code 세션 JSONL 을 raw source 로 읽어 지식노트(entity/decision/how-to)로 증류·누적한다. 결정적 선별·증분추출은 플러그인 헬퍼(`scripts/select.py`, `scripts/commit_cursor.py`)가, 증류는 이 명령(LLM)이 담당한다.
@@ -36,8 +37,10 @@ Claude Code 세션 JSONL 을 raw source 로 읽어 지식노트(entity/decision/
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/select.py --config ~/.claude/lore-wiki/config.json
 ```
-- stdout 마지막 줄 = `run_dir`. `<run_dir>/manifest.json` 을 읽는다.
-- `manifest.units` 가 비었으면 **"위키 최신 — ingest 할 새 세션 없음"** 보고 후 종료.
+- **stdout** = `run_dir` 한 줄(기계용). **stderr** = 사람용 선별 요약(총계 + 프로젝트별 신규 세션 수).
+- **stderr 요약을 그대로 사용자에게 보여준다.** `manifest.json` 원본을 통째로 출력/덤프하지 말 것 — 유닛이 수백 개일 수 있어 검토 불가. 개별 유닛 메타는 증류 단계에서 그 유닛만 본다.
+- `<run_dir>/manifest.json` 의 `units` 가 비었으면 **"위키 최신 — ingest 할 새 세션 없음"** 보고 후 종료.
+- **신규 세션이 많으면**(수십~수백) 한 번에 전부 증류하는 건 큰 작업이다. 사용자에게 규모를 알리고, 좁히려면 config 의 `include`(cwd glob, 예 `["*/wafl_console"]`)로 프로젝트를 한정해 재실행하도록 안내한다.
 
 ### 2. 유닛 루프 (각 unit)
 
@@ -56,10 +59,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/select.py --config ~/.claude/lore-wiki/con
      --config ~/.claude/lore-wiki/config.json \
      --manifest <run_dir>/manifest.json --unit <unit.unit_id>
    ```
+5. **진행 보고**: 유닛 처리 후 `유닛 N/총M: <unit.file> → 생성 [[A]] · 갱신 [[B]]` 식 **한 줄**로만 보고. 유닛 파일이나 페이지 본문을 덤프하지 말 것.
 
 ### 3. 정리 / 보고
 
-- 처리한 유닛 수·생성/갱신 페이지 수·스캔/스킵 세션 수를 요약 보고.
+- 처리한 유닛 수·생성/갱신 페이지 수·스캔/스킵 세션 수를 **간결히** 요약 보고. raw manifest·유닛 파일·페이지 본문을 덤프하지 말 것.
 - (선택) `run_dir` 정리. 다음 실행이 어차피 덮어쓰므로 실패해도 무방.
 
 ## 원칙

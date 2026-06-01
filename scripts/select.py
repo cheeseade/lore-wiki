@@ -3,6 +3,7 @@ import fnmatch
 import glob
 import json
 import os
+from collections import Counter
 
 DEFAULTS = {
     "session_root": "~/.claude/projects",
@@ -270,15 +271,52 @@ def run(config_path, run_dir):
     return manifest
 
 
+def _fmt_bytes(n):
+    f = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if f < 1024 or unit == "GB":
+            return "%d B" % n if unit == "B" else "%.1f %s" % (f, unit)
+        f /= 1024
+
+
+def human_summary(manifest, run_dir, top=15):
+    """검토용 간결 요약: 총계 + 프로젝트(cwd)별 신규 세션 수 상위 N개."""
+    units = manifest.get("units", [])
+    total_sessions = sum(len(u["sessions"]) for u in units)
+    total_bytes = sum(u["extracted_bytes"] for u in units)
+    proj = Counter()
+    for u in units:
+        for s in u["sessions"]:
+            proj[s.get("cwd") or "(unknown)"] += 1
+    lines = ["[lore-wiki] 선별 완료"]
+    lines.append("  스캔 %d · skip %d · 신규 %d 세션 → %d 유닛 · 추출 %s" % (
+        manifest.get("scanned", 0), manifest.get("skipped", 0),
+        total_sessions, len(units), _fmt_bytes(total_bytes)))
+    if proj:
+        lines.append("  프로젝트별 (신규 세션 수):")
+        ranked = proj.most_common()
+        for cwd, n in ranked[:top]:
+            lines.append("    %5d  %s" % (n, cwd))
+        rest = ranked[top:]
+        if rest:
+            lines.append("    ... (그 외 %d개 프로젝트, %d 세션)" % (
+                len(rest), sum(n for _, n in rest)))
+    lines.append("  run_dir: %s" % run_dir)
+    return "\n".join(lines)
+
+
 def main(argv=None):
     import argparse
+    import sys
     p = argparse.ArgumentParser(description="Lore Wiki 세션 선별·증분추출")
     p.add_argument("--config",
                    default=os.path.expanduser("~/.claude/lore-wiki/config.json"))
     p.add_argument("--run-dir",
                    default=os.path.expanduser("~/.claude/lore-wiki/run"))
     args = p.parse_args(argv)
-    run(args.config, args.run_dir)
+    manifest = run(args.config, args.run_dir)
+    # 사람용 요약은 stderr, run_dir(기계용)은 stdout 한 줄.
+    sys.stderr.write(human_summary(manifest, args.run_dir) + "\n")
     print(args.run_dir)
     return 0
 

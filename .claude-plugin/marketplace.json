@@ -1,0 +1,15 @@
+{
+  "name": "lore-wiki",
+  "description": "Lore Wiki 플러그인 마켓플레이스",
+  "owner": {
+    "name": "gglee",
+    "email": "gglee@cheeseade.com"
+  },
+  "plugins": [
+    {
+      "name": "lore-wiki",
+      "source": "./",
+      "description": "Claude Code 세션을 증류해 마크다운 지식 위키로 쌓는 ingest 도구"
+    }
+  ]
+}
