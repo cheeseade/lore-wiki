@@ -32,6 +32,32 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestExtractSignals(unittest.TestCase):
+    def test_keeps_signals_drops_noise(self):
+        objs = [
+            {"type": "user", "uuid": "u1", "timestamp": "T1",
+             "sessionId": "S", "cwd": "/work/app", "gitBranch": "main",
+             "message": {"role": "user", "content": "에러 어떻게 고쳐?"}},
+            {"type": "assistant", "uuid": "a1", "timestamp": "T2",
+             "message": {"role": "assistant", "content": [
+                 {"type": "thinking", "thinking": "음 노이즈"},
+                 {"type": "text", "text": "이렇게 고치면 됩니다"},
+                 {"type": "tool_use", "name": "Bash",
+                  "input": {"command": "npm test"}},
+             ]}},
+            {"type": "ai-title", "uuid": "x1", "title": "무시"},
+        ]
+        sig = sel.extract_signals(objs)
+        self.assertIn("에러 어떻게 고쳐?", sig["text"])
+        self.assertIn("이렇게 고치면 됩니다", sig["text"])
+        self.assertIn("npm test", sig["text"])
+        self.assertNotIn("음 노이즈", sig["text"])   # thinking 제거
+        self.assertEqual(sig["lastUuid"], "x1")        # 마지막 uuid
+        self.assertEqual(sig["cwd"], "/work/app")
+        self.assertEqual(sig["gitBranch"], "main")
+        self.assertEqual(sig["sessionId"], "S")
+
+
 class TestParseJsonl(unittest.TestCase):
     def test_skips_blank_and_broken(self):
         lines = [

@@ -39,6 +39,52 @@ def list_session_files(session_root):
     return sorted(glob.glob(pattern, recursive=True))
 
 
+def _text_from_content(content):
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    parts = []
+    for b in content:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "text":
+            parts.append(b.get("text", ""))
+        elif t == "tool_use":
+            name = b.get("name", "tool")
+            inp = b.get("input", {}) or {}
+            summary = inp.get("command") or inp.get("file_path") \
+                or json.dumps(inp, ensure_ascii=False)[:200]
+            parts.append("[tool_use %s] %s" % (name, summary))
+        # thinking / tool_result / 기타: 제거
+    return "\n".join(p for p in parts if p).strip()
+
+
+def extract_signals(objs):
+    blocks = []
+    meta = {"sessionId": None, "cwd": None, "gitBranch": None,
+            "lastUuid": None, "lastTimestamp": None}
+    for o in objs:
+        if not isinstance(o, dict):
+            continue
+        for k in ("sessionId", "cwd", "gitBranch"):
+            if o.get(k):
+                meta[k] = o[k]
+        if o.get("uuid"):
+            meta["lastUuid"] = o["uuid"]
+        if o.get("timestamp"):
+            meta["lastTimestamp"] = o["timestamp"]
+        typ = o.get("type")
+        msg = o.get("message")
+        if typ in ("user", "assistant") and isinstance(msg, dict):
+            txt = _text_from_content(msg.get("content"))
+            if txt:
+                blocks.append("## %s\n%s" % (typ, txt))
+    meta["text"] = "\n\n".join(blocks).strip()
+    return meta
+
+
 def parse_jsonl_lines(lines):
     out = []
     for line in lines:
