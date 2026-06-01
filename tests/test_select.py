@@ -32,6 +32,30 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestPackUnits(unittest.TestCase):
+    def _seg(self, sid, n):
+        return {"sessionId": sid, "extracted_bytes": n}
+
+    def test_batches_small_and_isolates_oversize(self):
+        segs = [
+            self._seg("a", 10),
+            self._seg("b", 10),
+            self._seg("big", 100),   # cap 초과 → 단독
+            self._seg("c", 10),
+        ]
+        units = sel.pack_units(segs, cap=25)
+        # a+b (20<=25), big 단독, c
+        self.assertEqual([[s["sessionId"] for s in u] for u in units],
+                         [["a", "b"], ["big"], ["c"]])
+
+    def test_boundary_exact_cap(self):
+        segs = [self._seg("a", 25), self._seg("b", 1)]
+        units = sel.pack_units(segs, cap=25)
+        # a 채워 25, b 추가하면 26>25 → 새 유닛
+        self.assertEqual([[s["sessionId"] for s in u] for u in units],
+                         [["a"], ["b"]])
+
+
 class TestMatchCwd(unittest.TestCase):
     def test_include_exclude(self):
         self.assertTrue(sel.match_cwd("/work/app", ["/work/*"], []))

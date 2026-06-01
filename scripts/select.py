@@ -35,6 +35,28 @@ def load_config(path):
     return cfg
 
 
+def pack_units(segments, cap):
+    units = []
+    current = []
+    current_bytes = 0
+    for seg in segments:
+        sb = seg["extracted_bytes"]
+        if sb > cap:
+            if current:
+                units.append(current)
+                current, current_bytes = [], 0
+            units.append([seg])
+            continue
+        if current and current_bytes + sb > cap:
+            units.append(current)
+            current, current_bytes = [], 0
+        current.append(seg)
+        current_bytes += sb
+    if current:
+        units.append(current)
+    return units
+
+
 def match_cwd(cwd, include, exclude):
     c = cwd or ""
     if include and not any(fnmatch.fnmatch(c, p) for p in include):
