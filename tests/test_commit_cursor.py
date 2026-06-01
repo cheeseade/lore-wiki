@@ -49,6 +49,29 @@ class TestCommitMain(unittest.TestCase):
             self.assertEqual(cur["sessions"]["S1"]["lastUuid"], "u1")
             self.assertIsNotNone(cur["lastRun"])
 
+    def test_main_bare_filename_cursor_path(self):
+        # cursor_path 가 디렉토리 없는 단순 파일명이어도 크래시 없이 기록
+        with tempfile.TemporaryDirectory() as d:
+            cfg_path = os.path.join(d, "config.json")
+            with open(cfg_path, "w") as f:
+                json.dump({"cursor_path": "cursor.json"}, f)
+            mpath = os.path.join(d, "manifest.json")
+            with open(mpath, "w") as f:
+                json.dump({"run_dir": d, "units": [
+                    {"unit_id": 1, "file": "unit-01.md", "extracted_bytes": 1,
+                     "sessions": [{"sessionId": "S1", "mtime": 1.0, "size": 10,
+                                   "byteOffset": 10, "lastUuid": "u1",
+                                   "lastTimestamp": "T1"}]}]}, f)
+            old = os.getcwd()
+            os.chdir(d)
+            try:
+                rc = cc.main(["--config", cfg_path, "--manifest", mpath,
+                              "--unit", "1"])
+                self.assertEqual(rc, 0)
+                self.assertTrue(os.path.exists("cursor.json"))
+            finally:
+                os.chdir(old)
+
     def test_main_unknown_unit_errors(self):
         with tempfile.TemporaryDirectory() as d:
             cfg_path = os.path.join(d, "config.json")

@@ -59,7 +59,9 @@ def main(argv=None):
     now_iso = datetime.now().astimezone().isoformat()
     update_cursor(cursor, unit["sessions"], now_iso)
 
-    os.makedirs(os.path.dirname(cursor_path), exist_ok=True)
+    dir_part = os.path.dirname(cursor_path)
+    if dir_part:
+        os.makedirs(dir_part, exist_ok=True)
     with open(cursor_path, "w", encoding="utf-8") as f:
         json.dump(cursor, f, ensure_ascii=False, indent=2)
     print("커서 갱신: 유닛 %d (%d 세션)" % (args.unit, len(unit["sessions"])))
