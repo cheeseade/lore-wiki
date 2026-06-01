@@ -166,6 +166,54 @@ class TestBuildSegment(unittest.TestCase):
             self.assertTrue(seg["fell_back"])
             self.assertIn("Q1", seg["text"])         # 전체 재읽기
 
+    def test_append_uuid_only_in_body_falls_back(self):
+        # lastUuid 문자열이 '본문'에만 있고 uuid 키 값은 아니면 → 오탐 없이 fallback
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "S.jsonl")
+            line0 = json.dumps({"type": "user", "uuid": "u1", "parentUuid": None,
+                                "timestamp": "T1", "sessionId": "S",
+                                "message": {"role": "user",
+                                            "content": "GHOST 관련 질문"}})
+            with open(p, "w") as f:
+                f.write(line0 + "\n")
+            off = os.stat(p).st_size
+            entry = {"byteOffset": off, "lastUuid": "GHOST",
+                     "size": off, "mtime": os.stat(p).st_mtime}
+            with open(p, "a") as f:
+                f.write(json.dumps({"type": "assistant", "uuid": "a1",
+                                    "parentUuid": "u1", "timestamp": "T2",
+                                    "message": {"role": "assistant",
+                                                "content": [{"type": "text",
+                                                             "text": "A1"}]}}) + "\n")
+            seg = sel.build_segment(p, "append", entry)
+            self.assertTrue(seg["fell_back"])
+
+    def test_append_non_boundary_offset_falls_back(self):
+        # offset 이 라인 경계(\n 직후)가 아니면 → fallback
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "S.jsonl")
+            with open(p, "w") as f:
+                f.write(self._session_lines()[0] + "\n")
+            full = os.stat(p).st_size
+            entry = {"byteOffset": full - 3, "lastUuid": "u1",
+                     "size": full - 3, "mtime": 0}
+            with open(p, "a") as f:
+                f.write(self._session_lines()[1] + "\n")
+            seg = sel.build_segment(p, "append", entry)
+            self.assertTrue(seg["fell_back"])
+
+    def test_rescan_reads_all_no_fallback(self):
+        # rescan 은 처음부터 전체 재읽기(fell_back=False)
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "S.jsonl")
+            with open(p, "w") as f:
+                f.write("\n".join(self._session_lines()) + "\n")
+            entry = {"byteOffset": 5, "lastUuid": "u1", "size": 9999, "mtime": 0}
+            seg = sel.build_segment(p, "rescan", entry)
+            self.assertFalse(seg["fell_back"])
+            self.assertIn("Q1", seg["text"])
+            self.assertIn("A1", seg["text"])
+
 
 class TestExtractSignals(unittest.TestCase):
     def test_keeps_signals_drops_noise(self):

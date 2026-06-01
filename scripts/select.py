@@ -3,7 +3,6 @@ import fnmatch
 import glob
 import json
 import os
-import shutil
 
 DEFAULTS = {
     "session_root": "~/.claude/projects",
@@ -139,7 +138,10 @@ def _read_from(path, offset):
 
 
 def _validate_offset(path, offset, last_uuid):
-    # offset 직전 윈도우에 last_uuid 가 존재하면 연속성 OK(재작성 아님).
+    # offset 직전 윈도우가 라인 경계(\n)로 끝나고, 그 안에 last_uuid 가
+    # JSON uuid 키 값으로 존재해야 연속성 OK(재작성/오프셋 깨짐 아님).
+    # 단순 부분문자열 매칭은 본문에 박힌 uuid 로 오탐(silent mis-read)나므로
+    # keyed 매칭 + 경계 확인으로 안전하게 fallback 한다.
     if not offset or not last_uuid:
         return False
     window = 1 << 16
@@ -147,7 +149,10 @@ def _validate_offset(path, offset, last_uuid):
     with open(path, "rb") as f:
         f.seek(start)
         chunk = f.read(offset - start)
-    return last_uuid.encode("utf-8") in chunk
+    if not chunk.endswith(b"\n"):
+        return False
+    u = last_uuid.encode("utf-8")
+    return (b'"uuid":"' + u + b'"') in chunk or (b'"uuid": "' + u + b'"') in chunk
 
 
 def build_segment(path, action, entry):
@@ -163,6 +168,8 @@ def build_segment(path, action, entry):
     objs = parse_jsonl_lines(raw.splitlines())
     sig = extract_signals(objs)
     if not sig["text"]:
+        # 신호 없는(노이즈만) append 는 유닛을 만들지 않아 커서가 전진하지 않는다.
+        # → 다음 실행에 새 바이트만 재추출(LLM 미개입, 저비용). 의도된 v1 절충.
         return None
     return {
         "sessionId": sig["sessionId"] or session_id_of(path),
@@ -199,9 +206,12 @@ def classify_file(path, cursor_sessions):
 
 
 def write_run(run_dir, units):
-    if os.path.isdir(run_dir):
-        shutil.rmtree(run_dir)
     os.makedirs(run_dir, exist_ok=True)
+    # 이전 실행 산출물(manifest.json, unit-*.md)만 제거 — run_dir 자체나
+    # 무관한 파일은 건드리지 않는다(잘못 지정된 --run-dir 보호).
+    for name in os.listdir(run_dir):
+        if name == "manifest.json" or (name.startswith("unit-") and name.endswith(".md")):
+            os.remove(os.path.join(run_dir, name))
     manifest = {"run_dir": run_dir, "units": []}
     meta_keys = ("sessionId", "path", "cwd", "gitBranch", "mtime",
                  "size", "byteOffset", "lastUuid", "lastTimestamp")
