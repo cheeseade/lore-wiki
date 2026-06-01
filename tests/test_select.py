@@ -32,6 +32,60 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestBuildSegment(unittest.TestCase):
+    def _session_lines(self):
+        return [
+            json.dumps({"type": "user", "uuid": "u1", "parentUuid": None,
+                        "timestamp": "T1", "sessionId": "S",
+                        "cwd": "/work/app", "gitBranch": "main",
+                        "message": {"role": "user", "content": "Q1"}}),
+            json.dumps({"type": "assistant", "uuid": "a1", "parentUuid": "u1",
+                        "timestamp": "T2",
+                        "message": {"role": "assistant",
+                                    "content": [{"type": "text", "text": "A1"}]}}),
+        ]
+
+    def test_new_reads_all(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "S.jsonl")
+            with open(p, "w") as f:
+                f.write("\n".join(self._session_lines()) + "\n")
+            seg = sel.build_segment(p, "new", {})
+            self.assertIn("Q1", seg["text"])
+            self.assertIn("A1", seg["text"])
+            self.assertEqual(seg["byteOffset"], os.stat(p).st_size)
+            self.assertEqual(seg["lastUuid"], "a1")
+            self.assertGreater(seg["extracted_bytes"], 0)
+
+    def test_append_valid_offset_reads_only_new(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "S.jsonl")
+            first = self._session_lines()[0] + "\n"
+            with open(p, "w") as f:
+                f.write(first)
+            off = os.stat(p).st_size
+            entry = {"byteOffset": off, "lastUuid": "u1",
+                     "size": off, "mtime": os.stat(p).st_mtime}
+            with open(p, "a") as f:
+                f.write(self._session_lines()[1] + "\n")
+            seg = sel.build_segment(p, "append", entry)
+            self.assertIn("A1", seg["text"])
+            self.assertNotIn("Q1", seg["text"])      # 이전 분은 안 읽음
+            self.assertFalse(seg["fell_back"])
+
+    def test_append_broken_offset_falls_back(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "S.jsonl")
+            with open(p, "w") as f:
+                f.write("\n".join(self._session_lines()) + "\n")
+            # lastUuid 가 파일에 없음 → 재작성 의심 → fallback
+            entry = {"byteOffset": 5, "lastUuid": "GHOST",
+                     "size": 5, "mtime": 0}
+            seg = sel.build_segment(p, "append", entry)
+            self.assertTrue(seg["fell_back"])
+            self.assertIn("Q1", seg["text"])         # 전체 재읽기
+
+
 class TestExtractSignals(unittest.TestCase):
     def test_keeps_signals_drops_noise(self):
         objs = [

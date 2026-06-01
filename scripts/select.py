@@ -98,6 +98,55 @@ def parse_jsonl_lines(lines):
     return out
 
 
+def _read_from(path, offset):
+    with open(path, "rb") as f:
+        f.seek(offset)
+        data = f.read()
+    return data.decode("utf-8", errors="replace")
+
+
+def _validate_offset(path, offset, last_uuid):
+    # offset 직전 윈도우에 last_uuid 가 존재하면 연속성 OK(재작성 아님).
+    if not offset or not last_uuid:
+        return False
+    window = 1 << 16
+    start = max(0, offset - window)
+    with open(path, "rb") as f:
+        f.seek(start)
+        chunk = f.read(offset - start)
+    return last_uuid.encode("utf-8") in chunk
+
+
+def build_segment(path, action, entry):
+    st = os.stat(path)
+    fell_back = False
+    if action == "append" and _validate_offset(
+            path, entry.get("byteOffset", 0), entry.get("lastUuid")):
+        raw = _read_from(path, entry["byteOffset"])
+    else:
+        if action == "append":
+            fell_back = True
+        raw = _read_from(path, 0)
+    objs = parse_jsonl_lines(raw.splitlines())
+    sig = extract_signals(objs)
+    if not sig["text"]:
+        return None
+    return {
+        "sessionId": sig["sessionId"] or session_id_of(path),
+        "path": path,
+        "cwd": sig["cwd"],
+        "gitBranch": sig["gitBranch"],
+        "mtime": st.st_mtime,
+        "size": st.st_size,
+        "byteOffset": st.st_size,
+        "lastUuid": sig["lastUuid"],
+        "lastTimestamp": sig["lastTimestamp"],
+        "text": sig["text"],
+        "extracted_bytes": len(sig["text"].encode("utf-8")),
+        "fell_back": fell_back,
+    }
+
+
 def session_id_of(path):
     base = os.path.basename(path)
     return base[:-len(".jsonl")] if base.endswith(".jsonl") else base
