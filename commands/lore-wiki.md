@@ -1,0 +1,69 @@
+---
+name: lore-wiki
+description: Claude Code 세션을 증류해 마크다운 지식 위키로 ingest 한다 (기본 서브커맨드 ingest)
+---
+
+Claude Code 세션 JSONL 을 raw source 로 읽어 지식노트(entity/decision/how-to)로 증류·누적한다. 결정적 선별·증분추출은 플러그인 헬퍼(`scripts/select.py`, `scripts/commit_cursor.py`)가, 증류는 이 명령(LLM)이 담당한다.
+
+## 호출 인터페이스
+
+| 인자 | 의미 |
+|---|---|
+| (없음) | `ingest` 와 동일 (기본) |
+| `ingest` | 새 세션 증분 ingest |
+
+`query`·`lint` 는 후속 스펙. 현재는 ingest 만.
+
+## 경로
+
+- 헬퍼: `${CLAUDE_PLUGIN_ROOT}/scripts/select.py`, `${CLAUDE_PLUGIN_ROOT}/scripts/commit_cursor.py` (플러그인 번들 파일은 `${CLAUDE_PLUGIN_ROOT}` 로 참조)
+- config: `~/.claude/lore-wiki/config.json` (없으면 첫 실행 플로우)
+- 이 명령은 **출력 디렉토리(위키)에서** 실행되는 것을 전제 — 그곳 `CLAUDE.md`(schema)가 자동 로드되어 증류 규약을 제공한다.
+
+## 절차
+
+### 0. config 확인 / 첫 실행 스캐폴딩
+
+1. `~/.claude/lore-wiki/config.json` 존재 확인.
+2. **없으면 첫 실행**:
+   - 사용자에게 **출력 디렉토리(위키 저장 위치)** 를 묻는다.
+   - `${CLAUDE_PLUGIN_ROOT}/config.example.json` 을 복사해 `output_dir` 를 채운 `~/.claude/lore-wiki/config.json` 작성. (`session_root`·`include` 등은 기본값 유지, 사용자가 조정 원하면 안내)
+   - 출력 디렉토리에 스캐폴딩: `${CLAUDE_PLUGIN_ROOT}/templates/schema.CLAUDE.md` → `<output_dir>/CLAUDE.md` 복사, 빈 `<output_dir>/index.md`·`<output_dir>/log.md` 생성. (이미 있으면 덮어쓰지 않음)
+3. config 의 `output_dir` 가 비었거나 경로가 없으면 명확히 에러 보고 후 중단(파괴적 동작 금지).
+
+### 1. 선별 (결정적)
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/select.py --config ~/.claude/lore-wiki/config.json
+```
+- stdout 마지막 줄 = `run_dir`. `<run_dir>/manifest.json` 을 읽는다.
+- `manifest.units` 가 비었으면 **"위키 최신 — ingest 할 새 세션 없음"** 보고 후 종료.
+
+### 2. 유닛 루프 (각 unit)
+
+`manifest.units` 를 순서대로:
+
+1. `<run_dir>/<unit.file>` 를 Read. (세션 헤더 + 증류용 텍스트)
+2. **증류** — 출력 디렉토리 `CLAUDE.md`(schema) 규약을 따른다:
+   - `index.md` 를 읽어 관련 기존 페이지를 찾는다.
+   - 같은 사실/엔티티/결정/해법이 기존 페이지에 있으면 **그 페이지에 병합**(read-modify-write). 없으면 schema 의 페이지 타입·네이밍·frontmatter 규약대로 신규 생성.
+   - 새 페이지 생성 시 `index.md` 갱신(카테고리별 링크 + 한 줄 요약).
+   - frontmatter 의 provenance 에 `unit.sessions[*]` 의 `sessionId`·`lastTimestamp` 를 기록.
+3. **`log.md` append** — schema 의 log 포맷(일관 prefix)으로 한 항목: 어느 세션(들)에서 어느 페이지를 만들었/갱신했는지 + provenance.
+4. **커서 커밋** (결정적):
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/commit_cursor.py \
+     --config ~/.claude/lore-wiki/config.json \
+     --manifest <run_dir>/manifest.json --unit <unit.unit_id>
+   ```
+
+### 3. 정리 / 보고
+
+- 처리한 유닛 수·생성/갱신 페이지 수·스캔/스킵 세션 수를 요약 보고.
+- (선택) `run_dir` 정리. 다음 실행이 어차피 덮어쓰므로 실패해도 무방.
+
+## 원칙
+
+- **결정적 경계 침범 금지**: 파일 선별·증분·커서 갱신은 헬퍼에 위임. 이 명령은 증류·병합·log 작성만.
+- **병합 우선(dedup)**: 같은 지식의 중복 페이지를 만들지 않는다. 항상 `index.md` → 기존 페이지 확인 후 병합.
+- **schema 준수**: 페이지 타입·네이밍·링크·frontmatter 는 출력 디렉토리 `CLAUDE.md` 를 단일 출처로 삼는다.
