@@ -32,6 +32,54 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestRunIntegration(unittest.TestCase):
+    def _write_session(self, root, proj, sid, q, a, cwd):
+        pdir = os.path.join(root, proj)
+        os.makedirs(pdir, exist_ok=True)
+        lines = [
+            json.dumps({"type": "user", "uuid": sid + "-u", "parentUuid": None,
+                        "timestamp": "T1", "sessionId": sid, "cwd": cwd,
+                        "gitBranch": "main",
+                        "message": {"role": "user", "content": q}}),
+            json.dumps({"type": "assistant", "uuid": sid + "-a",
+                        "parentUuid": sid + "-u", "timestamp": "T2",
+                        "message": {"role": "assistant",
+                                    "content": [{"type": "text", "text": a}]}}),
+        ]
+        with open(os.path.join(pdir, sid + ".jsonl"), "w") as f:
+            f.write("\n".join(lines) + "\n")
+
+    def test_end_to_end_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = os.path.join(d, "projects")
+            self._write_session(root, "projA", "S1", "질문1", "답1", "/work/app")
+            self._write_session(root, "projB", "S2", "질문2", "답2", "/home/x")
+            cfg_path = os.path.join(d, "config.json")
+            with open(cfg_path, "w") as f:
+                json.dump({"session_root": root,
+                           "cursor_path": os.path.join(d, "cursor.json"),
+                           "include": ["/work/*"]}, f)
+            run_dir = os.path.join(d, "run")
+            manifest = sel.run(cfg_path, run_dir)
+
+            # /home/x 는 include 에서 제외 → S1 만 ingest
+            self.assertEqual(len(manifest["units"]), 1)
+            unit = manifest["units"][0]
+            self.assertEqual(unit["sessions"][0]["sessionId"], "S1")
+            # 유닛 파일 존재 + 내용
+            with open(os.path.join(run_dir, unit["file"])) as f:
+                body = f.read()
+            self.assertIn("질문1", body)
+            self.assertIn("답1", body)
+            # manifest.json 디스크 기록 확인
+            with open(os.path.join(run_dir, "manifest.json")) as f:
+                disk = json.load(f)
+            self.assertIn("scanned", disk)
+            self.assertEqual(disk["units"][0]["sessions"][0]["sessionId"], "S1")
+            # 유닛 파일엔 text 미포함(매니페스트는 메타만)
+            self.assertNotIn("text", unit["sessions"][0])
+
+
 class TestPackUnits(unittest.TestCase):
     def _seg(self, sid, n):
         return {"sessionId": sid, "extracted_bytes": n}

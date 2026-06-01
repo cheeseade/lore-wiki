@@ -3,6 +3,7 @@ import fnmatch
 import glob
 import json
 import os
+import shutil
 
 DEFAULTS = {
     "session_root": "~/.claude/projects",
@@ -195,3 +196,81 @@ def classify_file(path, cursor_sessions):
     if st.st_size > entry.get("size", 0):
         return "append", entry
     return "rescan", entry
+
+
+def write_run(run_dir, units):
+    if os.path.isdir(run_dir):
+        shutil.rmtree(run_dir)
+    os.makedirs(run_dir, exist_ok=True)
+    manifest = {"run_dir": run_dir, "units": []}
+    meta_keys = ("sessionId", "path", "cwd", "gitBranch", "mtime",
+                 "size", "byteOffset", "lastUuid", "lastTimestamp")
+    for i, segs in enumerate(units, start=1):
+        fname = "unit-%02d.md" % i
+        parts = []
+        sess_meta = []
+        for seg in segs:
+            header = "# session %s (cwd=%s, branch=%s, ts=%s)" % (
+                seg["sessionId"], seg["cwd"], seg["gitBranch"],
+                seg["lastTimestamp"])
+            parts.append(header + "\n\n" + seg["text"])
+            sess_meta.append({k: seg[k] for k in meta_keys})
+        with open(os.path.join(run_dir, fname), "w", encoding="utf-8") as f:
+            f.write("\n\n---\n\n".join(parts))
+        manifest["units"].append({
+            "unit_id": i,
+            "file": fname,
+            "extracted_bytes": sum(s["extracted_bytes"] for s in segs),
+            "sessions": sess_meta,
+        })
+    return manifest
+
+
+def _write_manifest(run_dir, manifest):
+    with open(os.path.join(run_dir, "manifest.json"), "w",
+              encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+
+def run(config_path, run_dir):
+    cfg = load_config(config_path)
+    cursor = load_json(cfg["cursor_path"], {"lastRun": None, "sessions": {}})
+    sessions = cursor.get("sessions", {})
+    files = list_session_files(cfg["session_root"])
+    scanned = skipped = 0
+    segments = []
+    for path in files:
+        scanned += 1
+        action, entry = classify_file(path, sessions)
+        if action == "skip":
+            skipped += 1
+            continue
+        seg = build_segment(path, action, entry or {})
+        if seg is None:
+            continue
+        if not match_cwd(seg["cwd"], cfg["include"], cfg["exclude"]):
+            continue
+        segments.append(seg)
+    units = pack_units(segments, cfg["batch_max_bytes"])
+    manifest = write_run(run_dir, units)
+    manifest["scanned"] = scanned
+    manifest["skipped"] = skipped
+    _write_manifest(run_dir, manifest)
+    return manifest
+
+
+def main(argv=None):
+    import argparse
+    p = argparse.ArgumentParser(description="Lore Wiki 세션 선별·증분추출")
+    p.add_argument("--config",
+                   default=os.path.expanduser("~/.claude/lore-wiki/config.json"))
+    p.add_argument("--run-dir",
+                   default=os.path.expanduser("~/.claude/lore-wiki/run"))
+    args = p.parse_args(argv)
+    run(args.config, args.run_dir)
+    print(args.run_dir)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
