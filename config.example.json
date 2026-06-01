@@ -1,0 +1,10 @@
+{
+  "session_root": "~/.claude/projects",
+  "output_dir": null,
+  "include": ["*"],
+  "exclude": [],
+  "cursor_path": "~/.claude/lore-wiki/cursor.json",
+  "obsidian": false,
+  "wikilink": false,
+  "batch_max_bytes": 40000
+}

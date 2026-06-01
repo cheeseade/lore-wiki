@@ -1,0 +1,5 @@
+{
+  "name": "lore-wiki",
+  "version": "0.1.0",
+  "description": "Claude Code 세션을 증류해 마크다운 지식 위키로 쌓는 ingest 도구"
+}
