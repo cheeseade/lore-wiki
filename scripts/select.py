@@ -39,6 +39,19 @@ def list_session_files(session_root):
     return sorted(glob.glob(pattern, recursive=True))
 
 
+def parse_jsonl_lines(lines):
+    out = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
 def session_id_of(path):
     base = os.path.basename(path)
     return base[:-len(".jsonl")] if base.endswith(".jsonl") else base

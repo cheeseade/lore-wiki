@@ -32,6 +32,21 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestParseJsonl(unittest.TestCase):
+    def test_skips_blank_and_broken(self):
+        lines = [
+            '{"type":"user","uuid":"1"}',
+            '',
+            'not json at all',
+            '   ',
+            '{"type":"mode","uuid":"2"}',
+        ]
+        objs = sel.parse_jsonl_lines(lines)
+        self.assertEqual(len(objs), 2)
+        self.assertEqual(objs[0]["uuid"], "1")
+        self.assertEqual(objs[1]["type"], "mode")
+
+
 class TestClassifyFile(unittest.TestCase):
     def _make(self, d, name, content):
         p = os.path.join(d, name)
