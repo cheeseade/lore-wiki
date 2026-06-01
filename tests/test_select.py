@@ -32,6 +32,15 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestMatchCwd(unittest.TestCase):
+    def test_include_exclude(self):
+        self.assertTrue(sel.match_cwd("/work/app", ["/work/*"], []))
+        self.assertFalse(sel.match_cwd("/home/x", ["/work/*"], []))
+        self.assertFalse(sel.match_cwd("/work/sandbox", ["/work/*"], ["*/sandbox"]))
+        self.assertTrue(sel.match_cwd("/anything", ["*"], []))       # 기본 전체
+        self.assertTrue(sel.match_cwd(None, ["*"], []))              # cwd 없음 허용
+
+
 class TestBuildSegment(unittest.TestCase):
     def _session_lines(self):
         return [

@@ -1,4 +1,5 @@
 """Lore Wiki — 결정적 선별·증분추출·신호필터·bin-packing 헬퍼."""
+import fnmatch
 import glob
 import json
 import os
@@ -32,6 +33,15 @@ def load_config(path):
     if cfg["output_dir"]:
         cfg["output_dir"] = os.path.expanduser(cfg["output_dir"])
     return cfg
+
+
+def match_cwd(cwd, include, exclude):
+    c = cwd or ""
+    if include and not any(fnmatch.fnmatch(c, p) for p in include):
+        return False
+    if any(fnmatch.fnmatch(c, p) for p in exclude):
+        return False
+    return True
 
 
 def list_session_files(session_root):
