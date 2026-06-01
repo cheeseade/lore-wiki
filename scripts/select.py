@@ -172,6 +172,7 @@ def build_segment(path, action, entry):
         # → 다음 실행에 새 바이트만 재추출(LLM 미개입, 저비용). 의도된 v1 절충.
         return None
     return {
+        "cursorKey": session_id_of(path),
         "sessionId": sig["sessionId"] or session_id_of(path),
         "path": path,
         "cwd": sig["cwd"],
@@ -213,7 +214,7 @@ def write_run(run_dir, units):
         if name == "manifest.json" or (name.startswith("unit-") and name.endswith(".md")):
             os.remove(os.path.join(run_dir, name))
     manifest = {"run_dir": run_dir, "units": []}
-    meta_keys = ("sessionId", "path", "cwd", "gitBranch", "mtime",
+    meta_keys = ("cursorKey", "sessionId", "path", "cwd", "gitBranch", "mtime",
                  "size", "byteOffset", "lastUuid", "lastTimestamp")
     for i, segs in enumerate(units, start=1):
         fname = "unit-%02d.md" % i

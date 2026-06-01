@@ -305,5 +305,46 @@ class TestListSessionFiles(unittest.TestCase):
             self.assertEqual(files, sorted(files))
 
 
+class TestCursorRoundTrip(unittest.TestCase):
+    def test_agent_file_skipped_on_second_run(self):
+        cc = load("lore_commit_cursor", "commit_cursor.py")
+        with tempfile.TemporaryDirectory() as d:
+            root = os.path.join(d, "projects", "proj")
+            os.makedirs(root)
+            # 파일명 stem(agent-xyz) != 내용 sessionId(UUID-CONTENT)
+            lines = [
+                json.dumps({"type": "user", "uuid": "u1", "parentUuid": None,
+                            "timestamp": "T1", "sessionId": "UUID-CONTENT",
+                            "cwd": "/work/app", "gitBranch": "main",
+                            "message": {"role": "user", "content": "질문"}}),
+                json.dumps({"type": "assistant", "uuid": "a1", "parentUuid": "u1",
+                            "timestamp": "T2",
+                            "message": {"role": "assistant",
+                                        "content": [{"type": "text",
+                                                     "text": "답"}]}}),
+            ]
+            with open(os.path.join(root, "agent-xyz.jsonl"), "w") as f:
+                f.write("\n".join(lines) + "\n")
+            cfg_path = os.path.join(d, "config.json")
+            with open(cfg_path, "w") as f:
+                json.dump({"session_root": os.path.join(d, "projects"),
+                           "cursor_path": os.path.join(d, "cursor.json")}, f)
+            run1 = os.path.join(d, "run1")
+            m1 = sel.run(cfg_path, run1)
+            self.assertEqual(len(m1["units"]), 1)
+            s0 = m1["units"][0]["sessions"][0]
+            self.assertEqual(s0["cursorKey"], "agent-xyz")
+            self.assertEqual(s0["sessionId"], "UUID-CONTENT")
+            # 커밋(커서 전진)
+            cc.main(["--config", cfg_path,
+                     "--manifest", os.path.join(run1, "manifest.json"),
+                     "--unit", "1"])
+            # 2차 실행 → 변경 없으니 skip
+            run2 = os.path.join(d, "run2")
+            m2 = sel.run(cfg_path, run2)
+            self.assertEqual(len(m2["units"]), 0)
+            self.assertEqual(m2["skipped"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,7 +29,7 @@ def find_unit(manifest, unit_id):
 def update_cursor(cursor, unit_sessions, now_iso):
     sessions = cursor.setdefault("sessions", {})
     for s in unit_sessions:
-        sessions[s["sessionId"]] = {
+        sessions[s.get("cursorKey") or s["sessionId"]] = {
             "mtime": s["mtime"],
             "size": s["size"],
             "byteOffset": s["byteOffset"],
