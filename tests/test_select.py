@@ -32,6 +32,40 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestClassifyFile(unittest.TestCase):
+    def _make(self, d, name, content):
+        p = os.path.join(d, name)
+        with open(p, "w") as f:
+            f.write(content)
+        return p
+
+    def test_new_skip_append_rescan(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = self._make(d, "s1.jsonl", "line1\n")
+            self.assertEqual(sel.session_id_of(p), "s1")
+
+            # 커서에 없음 → new
+            action, entry = sel.classify_file(p, {})
+            self.assertEqual(action, "new")
+            self.assertIsNone(entry)
+
+            st = os.stat(p)
+            cur = {"s1": {"size": st.st_size, "mtime": st.st_mtime,
+                          "byteOffset": st.st_size, "lastUuid": "u"}}
+            # 동일 → skip
+            self.assertEqual(sel.classify_file(p, cur)[0], "skip")
+
+            # 증가 → append
+            with open(p, "a") as f:
+                f.write("line2\n")
+            self.assertEqual(sel.classify_file(p, cur)[0], "append")
+
+            # 감소 → rescan
+            cur2 = {"s1": {"size": 9999, "mtime": st.st_mtime,
+                           "byteOffset": 9999, "lastUuid": "u"}}
+            self.assertEqual(sel.classify_file(p, cur2)[0], "rescan")
+
+
 class TestListSessionFiles(unittest.TestCase):
     def test_lists_jsonl_recursively_sorted(self):
         with tempfile.TemporaryDirectory() as d:
