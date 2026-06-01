@@ -32,5 +32,20 @@ class TestLoadConfig(unittest.TestCase):
             self.assertNotIn("~", cfg["cursor_path"])
 
 
+class TestListSessionFiles(unittest.TestCase):
+    def test_lists_jsonl_recursively_sorted(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "projA"))
+            os.makedirs(os.path.join(d, "projB", "sub"))
+            open(os.path.join(d, "projA", "b.jsonl"), "w").close()
+            open(os.path.join(d, "projA", "a.jsonl"), "w").close()
+            open(os.path.join(d, "projB", "sub", "c.jsonl"), "w").close()
+            open(os.path.join(d, "projA", "note.txt"), "w").close()
+            files = sel.list_session_files(d)
+            self.assertEqual(len(files), 3)
+            self.assertTrue(all(f.endswith(".jsonl") for f in files))
+            self.assertEqual(files, sorted(files))
+
+
 if __name__ == "__main__":
     unittest.main()

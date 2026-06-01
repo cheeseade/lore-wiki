@@ -1,4 +1,5 @@
 """Lore Wiki — 결정적 선별·증분추출·신호필터·bin-packing 헬퍼."""
+import glob
 import json
 import os
 
@@ -31,3 +32,8 @@ def load_config(path):
     if cfg["output_dir"]:
         cfg["output_dir"] = os.path.expanduser(cfg["output_dir"])
     return cfg
+
+
+def list_session_files(session_root):
+    pattern = os.path.join(session_root, "**", "*.jsonl")
+    return sorted(glob.glob(pattern, recursive=True))
