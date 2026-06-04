@@ -55,8 +55,10 @@ class TestRunIntegration(unittest.TestCase):
             self._write_session(root, "projA", "S1", "질문1", "답1", "/work/app")
             self._write_session(root, "projB", "S2", "질문2", "답2", "/home/x")
             cfg_path = os.path.join(d, "config.json")
+            wiki = os.path.join(d, "wiki")
             with open(cfg_path, "w") as f:
                 json.dump({"session_root": root,
+                           "output_dir": wiki,
                            "cursor_path": os.path.join(d, "cursor.json"),
                            "include": ["/work/*"]}, f)
             run_dir = os.path.join(d, "run")
@@ -66,6 +68,9 @@ class TestRunIntegration(unittest.TestCase):
             self.assertEqual(len(manifest["units"]), 1)
             unit = manifest["units"][0]
             self.assertEqual(unit["sessions"][0]["sessionId"], "S1")
+            # 위키 절대 기준점(output_dir)을 manifest 로 내보낸다 — 명령(LLM)이
+            # cwd 에 의존하지 않고 절대 경로로 위키 파일을 쓰게 한다.
+            self.assertEqual(manifest["output_dir"], wiki)
             # 유닛 파일 존재 + 내용
             with open(os.path.join(run_dir, unit["file"])) as f:
                 body = f.read()
@@ -75,6 +80,7 @@ class TestRunIntegration(unittest.TestCase):
             with open(os.path.join(run_dir, "manifest.json")) as f:
                 disk = json.load(f)
             self.assertIn("scanned", disk)
+            self.assertEqual(disk["output_dir"], wiki)
             self.assertEqual(disk["units"][0]["sessions"][0]["sessionId"], "S1")
             # 유닛 파일엔 text 미포함(매니페스트는 메타만)
             self.assertNotIn("text", unit["sessions"][0])

@@ -265,6 +265,9 @@ def run(config_path, run_dir):
         segments.append(seg)
     units = pack_units(segments, cfg["batch_max_bytes"])
     manifest = write_run(run_dir, units)
+    # 위키 절대 기준점(~ 확장 완료) — 명령(LLM)이 cwd 에 의존하지 않고
+    # <output_dir>/index.md·log.md·페이지를 절대 경로로 쓰게 한다.
+    manifest["output_dir"] = cfg["output_dir"]
     manifest["scanned"] = scanned
     manifest["skipped"] = skipped
     _write_manifest(run_dir, manifest)
@@ -301,6 +304,8 @@ def human_summary(manifest, run_dir, top=15):
         if rest:
             lines.append("    ... (그 외 %d개 프로젝트, %d 세션)" % (
                 len(rest), sum(n for _, n in rest)))
+    if manifest.get("output_dir"):
+        lines.append("  wiki(output_dir): %s" % manifest["output_dir"])
     lines.append("  run_dir: %s" % run_dir)
     return "\n".join(lines)
 
