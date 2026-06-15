@@ -52,8 +52,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/select.py --config ~/.claude/lore-wiki/con
 2. **증류** — 출력 디렉토리 `CLAUDE.md`(schema) 규약을 따른다. **모든 위키 파일은 `<output_dir>/...` 절대 경로로 읽고 쓴다:**
    - `<output_dir>/index.md` 를 읽어 관련 기존 페이지를 찾는다.
    - 같은 사실/엔티티/결정/해법이 기존 페이지에 있으면 **그 페이지에 병합**(read-modify-write). 없으면 schema 의 페이지 타입·네이밍·frontmatter 규약대로 `<output_dir>/<page>.md` 신규 생성.
-   - 새 페이지 생성 시 `<output_dir>/index.md` 갱신(카테고리별 링크 + 한 줄 요약).
-   - frontmatter 의 provenance 에 `unit.sessions[*]` 의 `sessionId`·`lastTimestamp` 를 기록.
+   - frontmatter 필수 필드를 채운다: `type`·`title`(본문 H1 과 일치)·`description`(한 줄 요약)·`tags`·`created`·`updated`·`timestamp`(OKF 표준, `updated` 값 미러링). provenance 는 `sessions` 에 `unit.sessions[*]` 의 `sessionId`·`lastTimestamp` 를 기록.
+   - 새/갱신 페이지를 `<output_dir>/index.md` 에 반영하되, **index 항목의 한 줄 요약은 그 페이지 frontmatter 의 `description` 과 동일하게** 한다(단일 출처).
 3. **`<output_dir>/log.md` append** — schema 의 log 포맷(일관 prefix)으로 한 항목: 어느 세션(들)에서 어느 페이지를 만들었/갱신했는지 + provenance. **반드시 절대 경로 `<output_dir>/log.md`** 에 쓴다 — Write/Edit 도구(절대 경로)를 쓰거나, Bash append 가 불가피하면 `>> "<output_dir>/log.md"` 처럼 절대 경로를 명시한다. 상대 `log.md` 금지.
 4. **커서 커밋** (결정적):
    ```bash
