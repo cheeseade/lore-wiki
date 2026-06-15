@@ -69,6 +69,52 @@ def humanize_filename(basename):
     return stem.replace("-", " ")
 
 
+def yaml_dquote(value):
+    """double-quoted YAML 스칼라로 인용(역슬래시·따옴표 이스케이프)."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return '"%s"' % escaped
+
+
+def _insert_after(lines, anchor_key, new_lines):
+    """anchor_key 최상위 라인 바로 뒤에 new_lines 삽입. anchor 없으면 맨 앞."""
+    idx = None
+    for i, line in enumerate(lines):
+        if re.match(r"^%s:" % re.escape(anchor_key), line):
+            idx = i
+            break
+    insert_at = (idx + 1) if idx is not None else 0
+    return lines[:insert_at] + list(new_lines) + lines[insert_at:]
+
+
+def inject_fields(fm_lines, title, description, timestamp):
+    """누락된 OKF 필드 삽입.
+
+    - title·description: `type` 라인 아래 (자유 텍스트 → 큰따옴표 인용)
+    - timestamp: `updated` 라인 아래 (날짜 스칼라 → 인용 없음)
+    이미 있는 필드는 건드리지 않는다. 반환: (new_fm_lines, changed).
+    """
+    keys = frontmatter_keys(fm_lines)
+    lines = list(fm_lines)
+    changed = False
+    head = []
+    if "title" not in keys and title is not None:
+        head.append("title: %s" % yaml_dquote(title))
+    if "description" not in keys and description is not None:
+        head.append("description: %s" % yaml_dquote(description))
+    if head:
+        lines = _insert_after(lines, "type", head)
+        changed = True
+    if "timestamp" not in keys and timestamp is not None:
+        lines = _insert_after(lines, "updated", ["timestamp: %s" % timestamp])
+        changed = True
+    return lines, changed
+
+
+def rebuild(fm_lines, body):
+    """frontmatter 라인 + 본문 → 원본 텍스트 형태로 합성."""
+    return "---\n" + "\n".join(fm_lines) + "\n---\n" + body
+
+
 def parse_index(index_text, wikilink):
     """index.md → {page_key: description}. page_key = basename(.md 제외)."""
     out = {}

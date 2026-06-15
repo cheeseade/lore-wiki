@@ -49,6 +49,55 @@ class TestFrontmatter(unittest.TestCase):
         self.assertIsNone(mig.frontmatter_value(fm_lines, "sessions"))  # 값 없음
 
 
+class TestInject(unittest.TestCase):
+    def test_yaml_dquote_plain(self):
+        self.assertEqual(mig.yaml_dquote("간단 요약"), '"간단 요약"')
+
+    def test_yaml_dquote_escapes(self):
+        self.assertEqual(mig.yaml_dquote('경로 C:\\x "인용"'),
+                         '"경로 C:\\\\x \\"인용\\""')
+
+    def test_inject_title_description_after_type(self):
+        fm = ["type: entity", "tags: [a]"]
+        out, changed = mig.inject_fields(fm, "제목", "요약", None)
+        self.assertTrue(changed)
+        self.assertEqual(out, [
+            "type: entity", 'title: "제목"', 'description: "요약"', "tags: [a]"])
+
+    def test_inject_timestamp_after_updated(self):
+        fm = ["type: entity", "updated: 2026-06-01", "sessions:"]
+        out, changed = mig.inject_fields(fm, None, None, "2026-06-01")
+        self.assertTrue(changed)
+        self.assertEqual(out, [
+            "type: entity", "updated: 2026-06-01",
+            "timestamp: 2026-06-01", "sessions:"])
+
+    def test_inject_all_three(self):
+        fm = ["type: entity", "updated: 2026-06-02"]
+        out, changed = mig.inject_fields(fm, "T", "D", "2026-06-02")
+        self.assertTrue(changed)
+        self.assertEqual(out, [
+            "type: entity", 'title: "T"', 'description: "D"',
+            "updated: 2026-06-02", "timestamp: 2026-06-02"])
+
+    def test_inject_idempotent_when_all_present(self):
+        fm = ["type: entity", 'title: "T"', 'description: "D"',
+              "updated: 2026-06-01", "timestamp: 2026-06-01"]
+        out, changed = mig.inject_fields(fm, "새", "새요약", "2026-06-01")
+        self.assertFalse(changed)
+        self.assertEqual(out, fm)
+
+    def test_inject_skips_none_values(self):
+        fm = ["type: entity"]
+        out, changed = mig.inject_fields(fm, "제목", None, None)
+        self.assertTrue(changed)
+        self.assertEqual(out, ["type: entity", 'title: "제목"'])
+
+    def test_rebuild_roundtrip(self):
+        fm_lines, body = mig.split_frontmatter(PAGE)
+        self.assertEqual(mig.rebuild(fm_lines, body), PAGE)
+
+
 class TestParseIndex(unittest.TestCase):
     def test_wikilink(self):
         idx = (
