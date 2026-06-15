@@ -49,6 +49,53 @@ class TestFrontmatter(unittest.TestCase):
         self.assertIsNone(mig.frontmatter_value(fm_lines, "sessions"))  # 값 없음
 
 
+class TestProcessPage(unittest.TestCase):
+    DESCS = {"my-page": "인덱스가 준 요약"}
+
+    def test_updated(self):
+        new, status = mig.process_page(PAGE, "my-page.md", self.DESCS)
+        self.assertEqual(status, "updated")
+        self.assertIn('title: "My Page Title"', new)
+        self.assertIn('description: "인덱스가 준 요약"', new)
+        self.assertIn("timestamp: 2026-06-02", new)   # updated 값 미러링
+        self.assertIn("## 1. 개요", new)               # 본문 보존
+        self.assertIn("type: entity", new)             # 기존 필드 보존
+
+    def test_skipped_when_all_present(self):
+        already = PAGE.replace(
+            "type: entity\n",
+            'type: entity\ntitle: "T"\ndescription: "D"\n').replace(
+            "updated: 2026-06-02\n",
+            "updated: 2026-06-02\ntimestamp: 2026-06-02\n")
+        new, status = mig.process_page(already, "my-page.md", self.DESCS)
+        self.assertEqual(status, "skipped")
+        self.assertEqual(new, already)
+
+    def test_flagged_when_no_index_desc(self):
+        new, status = mig.process_page(PAGE, "unknown-page.md", {})
+        self.assertEqual(status, "flagged")
+        self.assertIn('title: "My Page Title"', new)  # title·timestamp 는 채워짐
+        self.assertIn("timestamp: 2026-06-02", new)
+        self.assertNotIn("description:", new)          # description 은 비움
+
+    def test_no_frontmatter(self):
+        new, status = mig.process_page("# H1만 있음\n본문\n", "x.md", {})
+        self.assertEqual(status, "no-frontmatter")
+        self.assertEqual(new, "# H1만 있음\n본문\n")
+
+    def test_idempotent_rerun_on_updated(self):
+        once, _ = mig.process_page(PAGE, "my-page.md", self.DESCS)
+        twice, status = mig.process_page(once, "my-page.md", self.DESCS)
+        self.assertEqual(status, "skipped")
+        self.assertEqual(twice, once)
+
+    def test_idempotent_rerun_on_flagged(self):
+        once, _ = mig.process_page(PAGE, "unknown-page.md", {})
+        twice, status = mig.process_page(once, "unknown-page.md", {})
+        self.assertEqual(status, "flagged")
+        self.assertEqual(twice, once)
+
+
 class TestInject(unittest.TestCase):
     def test_yaml_dquote_plain(self):
         self.assertEqual(mig.yaml_dquote("간단 요약"), '"간단 요약"')

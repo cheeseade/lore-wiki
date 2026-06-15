@@ -115,6 +115,33 @@ def rebuild(fm_lines, body):
     return "---\n" + "\n".join(fm_lines) + "\n---\n" + body
 
 
+def process_page(text, basename, descriptions):
+    """페이지 텍스트 → (new_text, status).
+
+    status ∈ updated | skipped | flagged | no-frontmatter.
+    flagged = title/timestamp 는 채웠으나 index 요약이 없어 description 미확정.
+    """
+    fm_lines, body = split_frontmatter(text)
+    if fm_lines is None:
+        return text, "no-frontmatter"
+    keys = frontmatter_keys(fm_lines)
+    has_title = "title" in keys
+    has_desc = "description" in keys
+    has_ts = "timestamp" in keys
+    if has_title and has_desc and has_ts:
+        return text, "skipped"
+    key = basename[:-3] if basename.endswith(".md") else basename
+    title = extract_title(body) or humanize_filename(basename)
+    description = descriptions.get(key)
+    timestamp = frontmatter_value(fm_lines, "updated")
+    new_fm, changed = inject_fields(fm_lines, title, description, timestamp)
+    new_text = rebuild(new_fm, body) if changed else text
+    final_has_desc = has_desc or (description is not None)
+    if not final_has_desc:
+        return new_text, "flagged"
+    return new_text, ("updated" if changed else "skipped")
+
+
 def parse_index(index_text, wikilink):
     """index.md → {page_key: description}. page_key = basename(.md 제외)."""
     out = {}
