@@ -162,3 +162,56 @@ def parse_index(index_text, wikilink):
                 key = os.path.basename(m.group(2))[:-3]
                 out[key] = m.group(1)
     return out
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description="Lore Wiki OKF frontmatter 백필")
+    p.add_argument("--config", required=True)
+    p.add_argument("--dry-run", action="store_true")
+    args = p.parse_args(argv)
+
+    cfg = load_json(os.path.expanduser(args.config), {})
+    output_dir = cfg.get("output_dir")
+    if not output_dir:
+        raise SystemExit("config 에 output_dir 없음")
+    output_dir = os.path.expanduser(output_dir)
+    if not os.path.isdir(output_dir):
+        raise SystemExit("output_dir 디렉토리 없음: %s" % output_dir)
+    wikilink = bool(cfg.get("wikilink", False))
+
+    index_text = ""
+    index_path = os.path.join(output_dir, "index.md")
+    if os.path.exists(index_path):
+        with open(index_path, encoding="utf-8") as f:
+            index_text = f.read()
+    descriptions = parse_index(index_text, wikilink)
+
+    counts = {"updated": 0, "skipped": 0, "flagged": 0, "no-frontmatter": 0}
+    flagged = []
+    for name in sorted(os.listdir(output_dir)):
+        if not name.endswith(".md") or name in SKIP_FILES:
+            continue
+        path = os.path.join(output_dir, name)
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        new_text, status = process_page(text, name, descriptions)
+        counts[status] = counts.get(status, 0) + 1
+        if status in ("flagged", "no-frontmatter"):
+            flagged.append("%s (%s)" % (name, status))
+        if not args.dry_run and new_text != text:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(new_text)
+
+    mode = "[dry-run] " if args.dry_run else ""
+    print("%s백필 완료: updated=%d skipped=%d flagged=%d no-fm=%d" % (
+        mode, counts["updated"], counts["skipped"], counts["flagged"],
+        counts["no-frontmatter"]))
+    for item in flagged:
+        print("FLAG: %s" % item, file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

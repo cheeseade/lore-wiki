@@ -49,6 +49,53 @@ class TestFrontmatter(unittest.TestCase):
         self.assertIsNone(mig.frontmatter_value(fm_lines, "sessions"))  # 값 없음
 
 
+class TestMain(unittest.TestCase):
+    def _setup(self, d, wikilink=True):
+        out = os.path.join(d, "wiki")
+        os.makedirs(out)
+        cfg = os.path.join(d, "config.json")
+        import json as _j
+        with open(cfg, "w", encoding="utf-8") as f:
+            _j.dump({"output_dir": out, "wikilink": wikilink}, f)
+        with open(os.path.join(out, "index.md"), "w", encoding="utf-8") as f:
+            f.write("- [[my-page]] — 인덱스 요약\n")
+        with open(os.path.join(out, "my-page.md"), "w", encoding="utf-8") as f:
+            f.write(PAGE)
+        for skip in ("log.md", "CLAUDE.md"):  # 건드리면 안 되는 파일
+            with open(os.path.join(out, skip), "w", encoding="utf-8") as f:
+                f.write("# %s\nyo\n" % skip)
+        return cfg, out
+
+    def test_main_writes_fields(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg, out = self._setup(d)
+            rc = mig.main(["--config", cfg])
+            self.assertEqual(rc, 0)
+            with open(os.path.join(out, "my-page.md"), encoding="utf-8") as f:
+                txt = f.read()
+            self.assertIn('title: "My Page Title"', txt)
+            self.assertIn('description: "인덱스 요약"', txt)
+            self.assertIn("timestamp: 2026-06-02", txt)
+            with open(os.path.join(out, "CLAUDE.md"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), "# CLAUDE.md\nyo\n")  # 불변
+
+    def test_main_dry_run_no_write(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg, out = self._setup(d)
+            rc = mig.main(["--config", cfg, "--dry-run"])
+            self.assertEqual(rc, 0)
+            with open(os.path.join(out, "my-page.md"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), PAGE)  # 변경 없음
+
+    def test_main_missing_output_dir_errors(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = os.path.join(d, "config.json")
+            with open(cfg, "w", encoding="utf-8") as f:
+                f.write("{}")
+            with self.assertRaises(SystemExit):
+                mig.main(["--config", cfg])
+
+
 class TestProcessPage(unittest.TestCase):
     DESCS = {"my-page": "인덱스가 준 요약"}
 
