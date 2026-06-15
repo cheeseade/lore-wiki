@@ -49,5 +49,24 @@ class TestFrontmatter(unittest.TestCase):
         self.assertIsNone(mig.frontmatter_value(fm_lines, "sessions"))  # 값 없음
 
 
+class TestTitle(unittest.TestCase):
+    def test_extract_title(self):
+        self.assertEqual(mig.extract_title("# My Page Title\n본문"),
+                         "My Page Title")
+
+    def test_extract_title_with_backticks(self):
+        body = "# Anthropic `401 invalid x-api-key` 진단 (키 없음 vs 거부됨)\n"
+        self.assertEqual(
+            mig.extract_title(body),
+            "Anthropic `401 invalid x-api-key` 진단 (키 없음 vs 거부됨)")
+
+    def test_extract_title_none(self):
+        self.assertIsNone(mig.extract_title("## 소제목만\n본문"))
+
+    def test_humanize_filename(self):
+        self.assertEqual(mig.humanize_filename("cart-fifo-차감.md"),
+                         "cart fifo 차감")
+
+
 if __name__ == "__main__":
     unittest.main()

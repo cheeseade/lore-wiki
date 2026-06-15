@@ -52,3 +52,18 @@ def frontmatter_value(fm_lines, key):
         if m:
             return m.group(1) or None
     return None
+
+
+def extract_title(body):
+    """본문 첫 H1('# ...') 텍스트. 없으면 None."""
+    for line in body.split("\n"):
+        m = re.match(r"^#\s+(.+?)\s*$", line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def humanize_filename(basename):
+    """'a-b-c.md' → 'a b c' (H1 부재 시 title 폴백용)."""
+    stem = basename[:-3] if basename.endswith(".md") else basename
+    return stem.replace("-", " ")
