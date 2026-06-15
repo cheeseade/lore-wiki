@@ -60,4 +60,5 @@ commit_cursor.py (결정적): 유닛 단위 cursor.json 갱신
 ```bash
 python3 tests/test_select.py -v
 python3 tests/test_commit_cursor.py -v
+python3 tests/test_migrate_okf.py -v
 ```
