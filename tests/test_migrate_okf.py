@@ -49,6 +49,28 @@ class TestFrontmatter(unittest.TestCase):
         self.assertIsNone(mig.frontmatter_value(fm_lines, "sessions"))  # 값 없음
 
 
+class TestParseIndex(unittest.TestCase):
+    def test_wikilink(self):
+        idx = (
+            "# Index\n\n## Entities\n\n"
+            "- [[2026-screenpop-api]] — 삼성 ScreenPOP 백엔드, Transaction Script\n"
+            "- [[wafl-rise2]] — WAFL 차세대 RAG 엔진\n"
+        )
+        out = mig.parse_index(idx, wikilink=True)
+        self.assertEqual(out["2026-screenpop-api"],
+                         "삼성 ScreenPOP 백엔드, Transaction Script")
+        self.assertEqual(out["wafl-rise2"], "WAFL 차세대 RAG 엔진")
+
+    def test_non_wikilink(self):
+        idx = "- [삼성 ScreenPOP 백엔드](2026-screenpop-api.md)\n"
+        out = mig.parse_index(idx, wikilink=False)
+        self.assertEqual(out["2026-screenpop-api"], "삼성 ScreenPOP 백엔드")
+
+    def test_no_match_line_ignored(self):
+        out = mig.parse_index("## Entities\n일반 문장\n", wikilink=True)
+        self.assertEqual(out, {})
+
+
 class TestTitle(unittest.TestCase):
     def test_extract_title(self):
         self.assertEqual(mig.extract_title("# My Page Title\n본문"),

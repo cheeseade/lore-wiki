@@ -67,3 +67,25 @@ def humanize_filename(basename):
     """'a-b-c.md' → 'a b c' (H1 부재 시 title 폴백용)."""
     stem = basename[:-3] if basename.endswith(".md") else basename
     return stem.replace("-", " ")
+
+
+def parse_index(index_text, wikilink):
+    """index.md → {page_key: description}. page_key = basename(.md 제외)."""
+    out = {}
+    if wikilink:
+        pat = re.compile(r"\[\[([^\]]+?)\]\]\s*—\s*(.+?)\s*$")
+        for line in index_text.split("\n"):
+            m = pat.search(line)
+            if m:
+                key = m.group(1).split("/")[-1]
+                if key.endswith(".md"):
+                    key = key[:-3]
+                out[key] = m.group(2)
+    else:
+        pat = re.compile(r"\[([^\]]+?)\]\(([^)]+?\.md)\)")
+        for line in index_text.split("\n"):
+            m = pat.search(line)
+            if m:
+                key = os.path.basename(m.group(2))[:-3]
+                out[key] = m.group(1)
+    return out
