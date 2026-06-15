@@ -20,14 +20,31 @@
 
 ```yaml
 ---
-type: entity        # entity | decision | how-to
+type: entity        # entity | decision | how-to  (lore-wiki 어휘 — OKF "type 필수" 원칙)
+title: ...          # 사람용 이름 (페이지 H1 과 일치)
+description: ...    # 한 줄 요약 — index.md 항목의 정본 (단일 출처)
 tags: []
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
-sessions:           # provenance — 이 지식이 나온 세션
+created: YYYY-MM-DD    # 최초 생성일 (lore-wiki 확장)
+updated: YYYY-MM-DD    # 최종 수정일 (사람용, lore-wiki 확장)
+timestamp: YYYY-MM-DD  # OKF 표준 — updated 값 미러링(최종 수정)
+sessions:             # provenance — 이 지식이 나온 세션 (lore-wiki 확장)
   - { sessionId: "...", timestamp: "..." }
 ---
 ```
+
+## OKF 계보
+
+이 스키마는 [Open Knowledge Format (OKF) v0.1](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/) 기반이다.
+OKF 의 구조 원칙 — 마크다운+YAML frontmatter, 파일 경로 = 개념 정체성, `index.md`(카탈로그)·`log.md`(이력),
+페이지 간 링크 = 지식 그래프 — 을 그대로 따른다. frontmatter 필드는 두 갈래:
+
+| 필드 | 구분 |
+|---|---|
+| `type` · `title` · `description` · `tags` · `timestamp` | OKF 표준 |
+| `created` · `updated` · `sessions` | lore-wiki 확장 (`updated` 는 `timestamp` 와 값 동일) |
+
+`type` 은 OKF 에선 자유 문자열이나 lore-wiki 는 `entity|decision|how-to` enum 으로 좁혀 쓴다.
+`timestamp`(OKF 표준 최종수정 필드)는 `updated` 와 값이 같고, OKF 도구 호환을 위해 별도로 둔다.
 
 ## index.md
 
